@@ -1,16 +1,26 @@
-﻿using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
+﻿using UnityEngine;
+using UnityEngine.UI;
+using System.Collections;
+using System;
+
 
 public class GameManager : MonoBehaviour
 {
 
     public GameObject playerPrefab;
+    public Text continueText;
+    public Text scoreText;
 
+    private float timeElapsed = 0f;
+    private float bestTime = 0f;
+    private float blinkTime = 0f;
+    private bool blink;
+    private bool gameStarted;
     private TimeManager timeManager;
     private GameObject player;
     private GameObject floor;
     private Spawner spawner;
+    private bool bestBestTime;
 
     void Awake()
     {
@@ -33,13 +43,40 @@ public class GameManager : MonoBehaviour
 
         spawner.active = false;
 
-        ResetGame();
+        Time.timeScale = 0;
+
+        continueText.text = "PRESS ANY BUTTON TO START";
+
+        bestTime = PlayerPrefs.GetFloat("BestTime");
     }
 
     // Update is called once per frame
     void Update() {
 
+        if(!gameStarted && Time.timeScale == 0) {
 
+            if(Input.anyKeyDown) {
+                timeManager.ManipulateTime(1, 1f);
+                ResetGame();
+            }
+        }
+
+        if (!gameStarted) {
+            blinkTime++;
+
+            if (blinkTime % 40 == 0) {
+                blink = !blink;
+            }
+
+            continueText.canvasRenderer.SetAlpha(blink ? 0 : 1);
+
+            var textColor = bestBestTime ? "#FF0" : "#FFF";
+
+            scoreText.text = "TIME: " + FormatTime(timeElapsed) + "\n<color="+textColor+">BEST: " + FormatTime(bestTime)+"</color>";
+        } else {
+            timeElapsed += Time.deltaTime;
+            scoreText.text = "TIME: " + FormatTime(timeElapsed);
+        }
     }
 
     void OnPlayerKilled() {
@@ -48,17 +85,42 @@ public class GameManager : MonoBehaviour
         var playerDestroyScript = player.GetComponent<DestroyOffscreen>();
         playerDestroyScript.DestroyCallback -= OnPlayerKilled;
 
-        player.GetComponent<Rigidbody2D>().velocity = Vector2.zero;
+        player.GetComponent<Rigidbody2D> ().velocity = Vector2.zero;
         timeManager.ManipulateTime(0, 5.5f);
+
+        gameStarted = false;
+
+        continueText.text = "PRESS ANY BUTTON TO RESTART";
+
+        if(timeElapsed > bestTime) {
+            bestTime = timeElapsed;
+            PlayerPrefs.SetFloat("BestTime", bestTime);
+            bestBestTime = true;
+        }
     }
 
     void ResetGame() {
         spawner.active = true;
 
-        player = GameObjectUtil.Instantiate(playerPrefab, new Vector3(0, (Screen.height / PixelPerfectCamera.pixelsToUnits) / 2, 0));
+        player = GameObjectUtil.Instantiate(playerPrefab, new Vector3(0, (Screen.height / PixelPerfectCamera.pixelsToUnits) / 2 + 100, 0));
 
         var playerDestroyScript = player.GetComponent<DestroyOffscreen>();
         playerDestroyScript.DestroyCallback += OnPlayerKilled;
+
+        gameStarted = true;
+
+        continueText.canvasRenderer.SetAlpha(0);
+
+        timeElapsed = 0;
+        bestBestTime = false;
+    }
+
+
+    string FormatTime(float value){
+        TimeSpan t = TimeSpan.FromSeconds(value);
+
+        return string.Format("{0:D2}:{1:D2}", t.Minutes, t.Seconds);
+
     }
 }
 
